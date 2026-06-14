@@ -2,27 +2,29 @@ import sqlite3
 from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import sqlite3
+from datetime import datetime
+import os
 
-# ================== CONFIG ==================
-TOKEN = "8438035827:AAFDr38M-6anavgZFqqfb0AdSKDScsbmspY"
-GROUP_ID = -5314646004   # Replace with your group ID
-# ============================================
+TOKEN = os.getenv("8438035827:AAFDr38M-6anavgZFqqfb0AdSKDScsbmspY")
+GROUP_ID = -5314646004  # your group id
 
-# ================= DATABASE =================
-conn = sqlite3.connect("bot.db")
+if not TOKEN:
+    raise ValueError("❌ TOKEN missing!")
+
+conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS logs (
     user_id INTEGER,
-    username TEXT,
     name TEXT,
     date TEXT,
     count INTEGER
 )
 """)
 conn.commit()
+`
 
 # ================= FUNCTIONS =================
 
