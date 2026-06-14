@@ -9,7 +9,7 @@ import os
 TOKEN = os.getenv("8438035827:AAFDr38M-6anavgZFqqfb0AdSKDScsbmspY")
 GROUP_ID = -5314646004  # your group id
 
-if not TOKEN: raise ValueError("❌ TOKEN missing!")
++if not TOKEN: raise ValueError("❌ TOKEN missing!")
 
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
