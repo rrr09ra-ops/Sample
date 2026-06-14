@@ -5,7 +5,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filte
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ================== CONFIG ==================
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = "8438035827:AAFDr38M-6anavgZFqqfb0AdSKDScsbmspY"
 GROUP_ID = -5314646004   # Replace with your group ID
 # ============================================
 
