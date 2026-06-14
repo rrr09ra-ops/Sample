@@ -6,7 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ================== CONFIG ==================
 TOKEN = "YOUR_BOT_TOKEN"
-GROUP_ID = -100XXXXXXXXXX   # Replace with your group ID
+GROUP_ID = -5314646004   # Replace with your group ID
 # ============================================
 
 # ================= DATABASE =================
