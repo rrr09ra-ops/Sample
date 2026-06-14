@@ -24,7 +24,6 @@ CREATE TABLE IF NOT EXISTS logs (
 )
 """)
 conn.commit()
-`
 
 # ================= FUNCTIONS =================
 
