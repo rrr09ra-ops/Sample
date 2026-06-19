@@ -6,10 +6,11 @@ import sqlite3
 from datetime import datetime
 import os
 
-TOKEN = os.getenv("8438035827:AAFDr38M-6anavgZFqqfb0AdSKDScsbmspY")
-GROUP_ID = -5314646004  # your group id
+TOKEN = os.environ.get("TOKEN")   # ✅ use this
 
-if not TOKEN: 
+print("DEBUG TOKEN:", TOKEN)      # ✅ add this line
+
+if TOKEN is None or TOKEN == "":
     raise ValueError("❌ TOKEN missing!")
 
 conn = sqlite3.connect("bot.db", check_same_thread=False)
