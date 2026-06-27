@@ -148,9 +148,10 @@ async def reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # ================= MAIN =================
 
+import asyncio
 from telegram.ext import ApplicationBuilder, MessageHandler, filters
 
-if __name__ == "__main__":
+def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
@@ -158,3 +159,10 @@ if __name__ == "__main__":
     print("✅ Bot started successfully")
 
     app.run_polling()
+
+if __name__ == "__main__":
+    # ✅ create event loop manually (fix for Python 3.14)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    main()
