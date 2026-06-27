@@ -155,10 +155,4 @@ async def main():
 
     print("✅ Bot started successfully")
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.idle()
-
-import asyncio
-asyncio.run(main())
+    await app.run_polling()
