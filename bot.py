@@ -148,6 +148,9 @@ async def reminder(context: ContextTypes.DEFAULT_TYPE):
 
 # ================= MAIN =================
 
+from telegram.ext import ApplicationBuilder, MessageHandler, filters
+import asyncio
+
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -155,4 +158,8 @@ async def main():
 
     print("✅ Bot started successfully")
 
+    # ✅ This keeps bot running forever
     await app.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
