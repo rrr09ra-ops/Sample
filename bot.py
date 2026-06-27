@@ -153,20 +153,12 @@ async def main():
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    scheduler = AsyncIOScheduler()
+    print("✅ Bot started successfully")
 
-    # Reminder at 1 PM
-    scheduler.add_job(reminder, "cron", hour=13, minute=0)
-
-    # Report at 10:30 PM
-    scheduler.add_job(daily_report, "cron", hour=22, minute=30)
-
-    scheduler.start()
-
-    print("✅ Bot is running...")
-    await app.run_polling()
-
-# ================= START =================
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 import asyncio
 asyncio.run(main())
