@@ -152,10 +152,15 @@ def report_job(app):
     app.create_task(send())
 
 # ================= MAIN =================
-def main():
+import asyncio
 
-    # Start dummy server (fix Render timeout)
+def main():
+    # ✅ Start dummy server (Render fix)
     threading.Thread(target=run_server).start()
+
+    # ✅ Create event loop manually (Python 3.14 fix)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -163,16 +168,23 @@ def main():
 
     print("✅ Bot started successfully")
 
-    # Scheduler
+    # ✅ Scheduler
     scheduler = BackgroundScheduler()
-
     scheduler.add_job(lambda: reminder_job(app), trigger='cron', hour=13, minute=0)
     scheduler.add_job(lambda: report_job(app), trigger='cron', hour=22, minute=30)
-
     scheduler.start()
 
-    app.run_polling()
+    # ✅ Run bot inside loop
+    loop.run_until_complete(app.initialize())
+    loop.run_until_complete(app.start())
+    loop.run_until_complete(app.updater.start_polling())
 
+    # ✅ Keep running
+    loop.run_forever()
+
+
+if __name__ == "__main__":
+    main()
 # ================= START =================
 if __name__ == "__main__":
     main()
