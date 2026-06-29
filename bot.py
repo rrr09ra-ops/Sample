@@ -64,6 +64,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
 
 async def send_reminder(app):
+    print("🔥 REMINDER TRIGGERED")
     today = get_today()
 
     cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
@@ -128,10 +129,13 @@ def main():
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    scheduler.add_job(lambda: asyncio.run(send_reminder(app)), trigger='cron', hour=9, minute=59)
-    scheduler.add_job(lambda: asyncio.run(send_report(app)), trigger='cron', hour=15, minute=0)
+    def run_async(func, app):
+    asyncio.create_task(func(app))
 
-    scheduler.start()
+scheduler.add_job(run_async, args=[send_reminder, app], trigger='cron', hour=6, minute=30)
+scheduler.add_job(run_async, args=[send_report, app], trigger='interval', minutes=1)
+    
+scheduler.start()
 
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.start())
