@@ -2,7 +2,7 @@ import os
 import sqlite3
 import threading
 import asyncio
-from datetime import datetime
+from datetime import datetime, UTC
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from telegram import Update
@@ -10,10 +10,11 @@ from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filte
 from apscheduler.schedulers.background import BackgroundScheduler
 
 TOKEN = os.environ.get("TOKEN")
-GROUP_ID = -5314646004  # change this
+GROUP_ID = -5314646004  # Replace this
 
-print("DEBUG TOKEN:", TOKEN)
+print("✅ Bot starting...")
 
+# ================= SERVER =================
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -24,6 +25,7 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 10000), Handler)
     server.serve_forever()
 
+# ================= DATABASE =================
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -39,22 +41,21 @@ CREATE TABLE IF NOT EXISTS logs (
 conn.commit()
 
 def get_today():
-    return datetime.utcnow().strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 def format_user(name, username):
     return f"@{username}" if username else name
 
+# ================= PHOTO =================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today = get_today()
 
-    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?",
-                   (user.id, today))
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (user.id, today))
     row = cursor.fetchone()
 
     if row:
-        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
-                       (user.id, today))
+        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?", (user.id, today))
     else:
         cursor.execute(
             "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
@@ -63,8 +64,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conn.commit()
 
+# ================= REMINDER =================
 async def send_reminder(app):
     print("🔥 REMINDER TRIGGERED")
+
     today = get_today()
 
     cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
@@ -85,7 +88,10 @@ async def send_reminder(app):
 
         await app.bot.send_message(chat_id=GROUP_ID, text=msg)
 
+# ================= REPORT =================
 async def send_report(app):
+    print("🔥 REPORT TRIGGERED")
+
     today = get_today()
 
     cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
@@ -94,7 +100,7 @@ async def send_report(app):
     cursor.execute("SELECT user_id, username, name, count FROM logs WHERE date=?", (today,))
     data = cursor.fetchall()
 
-    data_dict = {uu for u in data}
+    data_dict = {u[0]: u for u in data}
 
     shared = "✅ Shared:\n"
     missed = "❌ Missed:\n"
@@ -116,6 +122,7 @@ async def send_report(app):
 
     await app.bot.send_message(chat_id=GROUP_ID, text=report)
 
+# ================= MAIN =================
 def main():
     threading.Thread(target=run_server, daemon=True).start()
 
@@ -125,20 +132,18 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    print("✅ Bot started successfully")
+    print("✅ Bot running")
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def run_async(func, app):
+    def run_async(func):
         asyncio.create_task(func(app))
 
-scheduler = BackgroundScheduler(timezone="UTC")
-
-# ✅ Test every 1 minute (for testing)
-scheduler.add_job(run_async, args=[send_reminder, app], trigger='interval', minutes=1)
+    # ✅ TEST EVERY 1 MINUTE
+    scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
 
 
-scheduler.start()
+    scheduler.start()
 
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.start())
@@ -146,5 +151,6 @@ scheduler.start()
 
     loop.run_forever()
 
+# ================= START =================
 if __name__ == "__main__":
     main()
