@@ -164,13 +164,13 @@ def main():
     # ✅ Scheduler (UTC timing for IST)
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    # 1 PM IST → 07:30 UTC
+    # 01:29 PM IST → 07:59 UTC
     scheduler.add_job(lambda: asyncio.run(send_reminder(app)),
-                      trigger='cron', hour=7, minute=30)
+                      trigger='cron', hour=7, minute=59)
 
-    # 10:30 PM IST → 17:00 UTC
+    # 08:30 PM IST → 13:00 UTC
     scheduler.add_job(lambda: asyncio.run(send_report(app)),
-                      trigger='cron', hour=17, minute=0)
+                      trigger='cron', hour=15, minute=0)
 
     scheduler.start()
 
