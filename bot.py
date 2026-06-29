@@ -1,3 +1,4 @@
+```python
 import os
 import sqlite3
 import threading
@@ -9,13 +10,11 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# CONFIG
 TOKEN = os.environ.get("TOKEN")
-GROUP_ID = -5314646004  # <-- change this
+GROUP_ID = -5314646004  # change this
 
 print("DEBUG TOKEN:", TOKEN)
 
-# DUMMY SERVER (Render fix)
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -26,7 +25,6 @@ def run_server():
     server = HTTPServer(("0.0.0.0", 10000), Handler)
     server.serve_forever()
 
-# DATABASE
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -41,14 +39,12 @@ CREATE TABLE IF NOT EXISTS logs (
 """)
 conn.commit()
 
-# HELPERS
 def get_today():
     return datetime.utcnow().strftime("%Y-%m-%d")
 
 def format_user(name, username):
     return f"@{username}" if username else name
 
-# PHOTO HANDLER
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today = get_today()
@@ -68,7 +64,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     conn.commit()
 
-# REMINDER
 async def send_reminder(app):
     today = get_today()
 
@@ -90,7 +85,6 @@ async def send_reminder(app):
 
         await app.bot.send_message(chat_id=GROUP_ID, text=msg)
 
-# REPORT
 async def send_report(app):
     today = get_today()
 
@@ -100,13 +94,10 @@ async def send_report(app):
     cursor.execute("SELECT user_id, username, name, count FROM logs WHERE date=?", (today,))
     data = cursor.fetchall()
 
-    data_dict = {u[0]: u for u in data}
-
-    report = f"📊 Daily Report ({today})\n\n"
+    data_dict = {uu for u in data}
 
     shared = "✅ Shared:\n"
     missed = "❌ Missed:\n"
-
     total = 0
 
     for user_id, username, name in users:
@@ -119,12 +110,12 @@ async def send_report(app):
         else:
             missed += f"• {display}\n"
 
+    report = f"📊 Daily Report ({today})\n\n"
     report += shared + "\n" + missed
     report += f"\n📸 Total Images: {total}"
 
     await app.bot.send_message(chat_id=GROUP_ID, text=report)
 
-# MAIN
 def main():
     threading.Thread(target=run_server, daemon=True).start()
 
@@ -138,9 +129,8 @@ def main():
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    # IST timings
-    scheduler.add_job(lambda: asyncio.run(send_reminder(app)), trigger='cron', hour=7, minute=30)
-    scheduler.add_job(lambda: asyncio.run(send_report(app)), trigger='cron', hour=17, minute=0)
+    scheduler.add_job(lambda: asyncio.run(send_reminder(app)), trigger='cron', hour=7, minute=59)
+    scheduler.add_job(lambda: asyncio.run(send_report(app)), trigger='cron', hour=15, minute=0)
 
     scheduler.start()
 
@@ -150,7 +140,5 @@ def main():
 
     loop.run_forever()
 
-# START
 if __name__ == "__main__":
     main()
-``
