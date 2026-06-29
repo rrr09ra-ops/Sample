@@ -136,14 +136,13 @@ def main():
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def run_async(func):
-        asyncio.create_task(func(app))
+def run_async(func, app, loop):
+    asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    # ✅ TEST EVERY 1 MINUTE
-    scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
+# ✅ TEST mode
+scheduler.add_job(run_async, args=[send_reminder, app, loop], trigger='interval', minutes=1)
 
-
-    scheduler.start()
+scheduler.start()
 
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.start())
