@@ -124,10 +124,8 @@ async def send_report(app):
 
 # ================= MAIN =================
 def main():
-    # Start dummy server
     threading.Thread(target=run_server, daemon=True).start()
 
-    # Create event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -136,27 +134,24 @@ def main():
 
     print("✅ Bot running")
 
-    # Scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
     def run_async(func):
         asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    # ✅ TEST every 1 minute
     scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
-
     scheduler.start()
 
-    # ✅ START BOT
+    # ✅ START SEQUENCE (VERY IMPORTANT ORDER)
     loop.run_until_complete(app.initialize())
 
-# ✅ THIS LINE FIXES CONFLICT PERMANENTLY
-loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
+    # ✅ FIX CONFLICT ERROR (MUST BE HERE)
+    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
 
-loop.run_until_complete(app.start())
-loop.run_until_complete(app.updater.start_polling())
+    loop.run_until_complete(app.start())
+    loop.run_until_complete(app.updater.start_polling())
 
-loop.run_forever()
+    loop.run_forever()
 
 # ================= START =================
 if __name__ == "__main__":
