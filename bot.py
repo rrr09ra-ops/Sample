@@ -149,6 +149,7 @@ def main():
 
     # ✅ START BOT
     loop.run_until_complete(app.initialize())
+    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
 
