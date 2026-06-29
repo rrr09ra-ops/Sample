@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import threading
+import asyncio
 from datetime import datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -10,7 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 # ================= CONFIG =================
 TOKEN = os.environ.get("TOKEN")
-GROUP_ID = -5314646004   # ⚠️ PUT YOUR GROUP ID
+GROUP_ID = -5314646004  # ⚠️ REPLACE
 
 print("DEBUG TOKEN:", TOKEN)
 
@@ -22,7 +23,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Bot Running")
+        self.wfile.write(b"Bot running")
 
 def run_server():
     server = HTTPServer(("0.0.0.0", 10000), Handler)
@@ -45,10 +46,10 @@ conn.commit()
 
 # ================= HELPERS =================
 def get_today():
-    return datetime.now().strftime("%Y-%m-%d")
+    return datetime.utcnow().strftime("%Y-%m-%d")
 
 def get_month():
-    return datetime.now().strftime("%Y-%m")
+    return datetime.utcnow().strftime("%Y-%m")
 
 def format_user(name, username):
     return f"@{username}" if username else name
@@ -56,10 +57,9 @@ def format_user(name, username):
 def get_monthly_count(user_id):
     month = get_month()
     cursor.execute("""
-    SELECT SUM(count) FROM logs
-    WHERE user_id=? AND date LIKE ?
+        SELECT SUM(count) FROM logs
+        WHERE user_id=? AND date LIKE ?
     """, (user_id, f"{month}%"))
-
     result = cursor.fetchone()[0]
     return result if result else 0
 
@@ -76,118 +76,112 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row = cursor.fetchone()
 
     if row:
-        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
-                       (user.id, today))
+        cursor.execute("""
+            UPDATE logs SET count=count+1
+            WHERE user_id=? AND date=?
+        """, (user.id, today))
     else:
         cursor.execute("""
-        INSERT INTO logs VALUES (?,?,?,?,?)
+            INSERT INTO logs (user_id, username, name, date, count)
+            VALUES (?, ?, ?, ?, ?)
         """, (user.id, username, name, today, 1))
 
     conn.commit()
 
-# ================= REMINDER (1 PM) =================
-def reminder_job(app):
-    async def send():
-        today = get_today()
+# ================= REMINDER =================
+async def send_reminder(app):
+    today = get_today()
 
-        cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
-        users = cursor.fetchall()
+    cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
+    users = cursor.fetchall()
 
-        cursor.execute("SELECT user_id FROM logs WHERE date=?", (today,))
-        submitted = {u[0] for u in cursor.fetchall()}
+    cursor.execute("SELECT user_id FROM logs WHERE date=?", (today,))
+    submitted = {u[0] for u in cursor.fetchall()}
 
-        reminder_list = []
+    missing = []
 
-        for user_id, username, name in users:
-            if user_id not in submitted:
-                reminder_list.append(format_user(name, username))
+    for user_id, username, name in users:
+        if user_id not in submitted:
+            missing.append(format_user(name, username))
 
-        if reminder_list:
-            msg = "⏰ Reminder\n\nPlease send your selfie:\n\n"
-            msg += "\n".join([f"• {u}" for u in reminder_list])
+    if missing:
+        msg = "⏰ Reminder\n\nPlease send your selfie:\n\n"
+        msg += "\n".join(f"• {u}" for u in missing)
 
-            await app.bot.send_message(chat_id=GROUP_ID, text=msg)
+        await app.bot.send_message(chat_id=GROUP_ID, text=msg)
 
-    app.create_task(send())
+# ================= REPORT =================
+async def send_report(app):
+    today = get_today()
 
-# ================= DAILY REPORT (10:30 PM) =================
-def report_job(app):
-    async def send():
-        today = get_today()
+    cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
+    users = cursor.fetchall()
 
-        cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
-        all_users = cursor.fetchall()
-
-        cursor.execute("""
+    cursor.execute("""
         SELECT user_id, username, name, count 
         FROM logs WHERE date=?
-        """, (today,))
-        today_data = cursor.fetchall()
+    """, (today,))
+    today_data = cursor.fetchall()
 
-        data_dict = {u[0]: u for u in today_data}
+    data_dict = {u[0]: u for u in today_data}
 
-        report = f"📊 Daily Report ({today})\n\n"
+    shared = "✅ Shared:\n"
+    missed = "❌ Missed:\n"
+    total = 0
 
-        shared = "✅ Shared:\n"
-        missed = "❌ Missed:\n"
-        total = 0
+    for user_id, username, name in users:
+        display = format_user(name, username)
 
-        for user_id, username, name in all_users:
-            display = format_user(name, username)
+        if user_id in data_dict:
+            count = data_dict[user_id][3]
+            monthly = get_monthly_count(user_id)
 
-            if user_id in data_dict:
-                count = data_dict[user_id][3]
-                monthly = get_monthly_count(user_id)
+            shared += f"• {display} — {count} today | {monthly} month\n"
+            total += count
+        else:
+            missed += f"• {display}\n"
 
-                shared += f"• {display} — {count} today | {monthly} month\n"
-                total += count
-            else:
-                missed += f"• {display}\n"
+    report = f"📊 Daily Report ({today})\n\n"
+    report += shared + "\n" + missed
+    report += f"\n📸 Total Images Today: {total}"
 
-        report += shared + "\n" + missed
-        report += f"\n📸 Total Images Today: {total}"
-
-        await app.bot.send_message(chat_id=GROUP_ID, text=report)
-
-    app.create_task(send())
+    await app.bot.send_message(chat_id=GROUP_ID, text=report)
 
 # ================= MAIN =================
-import asyncio
-
 def main():
     # ✅ Start dummy server (Render fix)
-    threading.Thread(target=run_server).start()
+    threading.Thread(target=run_server, daemon=True).start()
 
-    # ✅ Create event loop manually (Python 3.14 fix)
+    # ✅ Event loop fix (Python 3.14)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
     app = ApplicationBuilder().token(TOKEN).build()
-
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     print("✅ Bot started successfully")
 
-    # ✅ Scheduler
+    # ✅ Scheduler (UTC timing for IST)
     scheduler = BackgroundScheduler(timezone="UTC")
 
-# IST → UTC
-scheduler.add_job(lambda: reminder_job(app), trigger='cron', hour=7, minute=45)
-scheduler.add_job(lambda: report_job(app), trigger='cron', hour=15, minute=0)
+    # 1 PM IST → 07:30 UTC
+    scheduler.add_job(lambda: asyncio.run(send_reminder(app)),
+                      trigger='cron', hour=7, minute=30)
 
-scheduler.start()
+    # 10:30 PM IST → 17:00 UTC
+    scheduler.add_job(lambda: asyncio.run(send_report(app)),
+                      trigger='cron', hour=17, minute=0)
 
-    # ✅ Run bot inside loop
+    scheduler.start()
+
+    # ✅ Run bot safely
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
 
-    # ✅ Keep running
     loop.run_forever()
 
-
-if __name__ == "__main__":
-    main()
 # ================= START =================
 if __name__ == "__main__":
     main()
+``
