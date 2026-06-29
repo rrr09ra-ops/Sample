@@ -169,10 +169,13 @@ def main():
     print("✅ Bot started successfully")
 
     # ✅ Scheduler
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: reminder_job(app), trigger='cron', hour=13, minute=0)
-    scheduler.add_job(lambda: report_job(app), trigger='cron', hour=22, minute=30)
-    scheduler.start()
+    scheduler = BackgroundScheduler(timezone="UTC")
+
+# IST → UTC
+scheduler.add_job(lambda: reminder_job(app), trigger='cron', hour=7, minute=45)
+scheduler.add_job(lambda: report_job(app), trigger='cron', hour=15, minute=0)
+
+scheduler.start()
 
     # ✅ Run bot inside loop
     loop.run_until_complete(app.initialize())
