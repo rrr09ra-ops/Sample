@@ -130,11 +130,17 @@ def main():
     scheduler = BackgroundScheduler(timezone="UTC")
 
     def run_async(func, app):
-    asyncio.create_task(func(app))
+        asyncio.create_task(func(app))
 
-scheduler.add_job(run_async, args=[send_reminder, app], trigger='cron', hour=6, minute=30)
-scheduler.add_job(run_async, args=[send_report, app], trigger='interval', minutes=1)
-    
+scheduler = BackgroundScheduler(timezone="UTC")
+
+# ✅ Test every 1 minute (for testing)
+scheduler.add_job(run_async, args=[send_reminder, app], trigger='interval', minutes=1)
+
+# ✅ After testing, use real times:
+# scheduler.add_job(run_async, args=[send_reminder, app], trigger='cron', hour=7, minute=30)
+# scheduler.add_job(run_async, args=[send_report, app], trigger='cron', hour=17, minute=0)
+
 scheduler.start()
 
     loop.run_until_complete(app.initialize())
