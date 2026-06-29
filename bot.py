@@ -128,7 +128,7 @@ def main():
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    scheduler.add_job(lambda: asyncio.run(send_reminder(app)), trigger='cron', hour=7, minute=59)
+    scheduler.add_job(lambda: asyncio.run(send_reminder(app)), trigger='cron', hour=8, minute=59)
     scheduler.add_job(lambda: asyncio.run(send_report(app)), trigger='cron', hour=15, minute=0)
 
     scheduler.start()
