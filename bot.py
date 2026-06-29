@@ -137,9 +137,6 @@ scheduler = BackgroundScheduler(timezone="UTC")
 # ✅ Test every 1 minute (for testing)
 scheduler.add_job(run_async, args=[send_reminder, app], trigger='interval', minutes=1)
 
-# ✅ After testing, use real times:
-# scheduler.add_job(run_async, args=[send_reminder, app], trigger='cron', hour=7, minute=30)
-# scheduler.add_job(run_async, args=[send_report, app], trigger='cron', hour=17, minute=0)
 
 scheduler.start()
 
