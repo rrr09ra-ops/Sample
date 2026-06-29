@@ -124,8 +124,10 @@ async def send_report(app):
 
 # ================= MAIN =================
 def main():
+    # Start dummy server
     threading.Thread(target=run_server, daemon=True).start()
 
+    # Create event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
@@ -134,16 +136,18 @@ def main():
 
     print("✅ Bot running")
 
+    # Scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
-def run_async(func, app, loop):
-    asyncio.run_coroutine_threadsafe(func(app), loop)
+    def run_async(func):
+        asyncio.run_coroutine_threadsafe(func(app), loop)
 
-# ✅ TEST mode
-scheduler.add_job(run_async, args=[send_reminder, app, loop], trigger='interval', minutes=1)
+    # ✅ TEST every 1 minute
+    scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
 
-scheduler.start()
+    scheduler.start()
 
+    # ✅ START BOT
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
