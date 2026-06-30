@@ -23,7 +23,6 @@ import matplotlib.pyplot as plt
 TOKEN = "8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec"
 GROUP_ID = -1004432548929
 
-
 # ================= SERVER =================
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -65,6 +64,7 @@ CREATE TABLE IF NOT EXISTS streaks (
 conn.commit()
 
 
+# ================= HELPERS =================
 def get_today():
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
@@ -101,7 +101,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (user.id, today, 1)
         )
 
-    # ✅ streak safe insert
     cursor.execute(
         "SELECT 1 FROM streaks WHERE user_id=? AND date=?",
         (user.id, today)
@@ -170,11 +169,10 @@ async def send_graph(app):
     plt.title("7 Day Trend")
     plt.tight_layout()
 
-    path = "trend.png"
-    plt.savefig(path)
+    plt.savefig("trend.png")
     plt.close()
 
-    with open(path, "rb") as img:
+    with open("trend.png", "rb") as img:
         await app.bot.send_photo(GROUP_ID, img)
 
 
@@ -197,7 +195,6 @@ async def send_report(app):
         trend = get_trend(uid)
 
         display = f"@{username}" if username else name
-
         ranked.append((display, count, streak, trend))
         total += count
 
@@ -215,7 +212,7 @@ async def send_report(app):
     await send_graph(app)
 
 
-# ================= MANUAL COMMAND =================
+# ================= COMMAND =================
 async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_report(context.application)
 
@@ -227,12 +224,12 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    global app
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # ✅ handlers
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-
-    # ✅ IMPORTANT: manual testing command
     app.add_handler(CommandHandler("report", report_cmd))
 
     scheduler = BackgroundScheduler(timezone="UTC")
@@ -240,20 +237,24 @@ def main():
     def run_async(func):
         asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    # ✅ REPORT 8:30 PM IST
+    # ✅ 8:30 PM IST (15:00 UTC)
     scheduler.add_job(run_async, args=[send_report], trigger='cron', hour=15, minute=0)
 
     scheduler.start()
 
-    loop.run_until_complete(app.initialize())
+    async def start_bot():
+        await app.initialize()
 
-    # ✅ CRITICAL FIX
-    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
+        # ✅ FIX CONFLICT
+        await app.bot.delete_webhook(drop_pending_updates=True)
 
-    loop.run_until_complete(app.start())
+        # ✅ START POLLING CORRECTLY
+        await app.start()
+        await app.start_polling()
 
-    print("✅ BOT RUNNING")
+        print("✅ BOT RUNNING & LISTENING")
 
+    loop.run_until_complete(start_bot())
     loop.run_forever()
 
 
