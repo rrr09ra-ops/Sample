@@ -32,6 +32,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot running")
 
+
 def run_server():
     HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
 
@@ -143,7 +144,12 @@ def get_trend(uid):
     y = cursor.fetchone()
     y = y[0] if y else 0
 
-    return "📈" if t > y else "📉" if t < y else "➖"
+    if t > y:
+        return "📈"
+    elif t < y:
+        return "📉"
+    else:
+        return "➖"
 
 
 # ================= GRAPH =================
@@ -191,7 +197,6 @@ async def send_report(app):
 
         display = f"@{username}" if username else name
         ranked.append((display, count, streak, trend))
-
         total += count
 
     ranked.sort(key=lambda x: x[1], reverse=True)
@@ -218,22 +223,33 @@ def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # ✅ handlers
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CommandHandler("report", report_cmd))
 
+    # ✅ scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
     def scheduled_job():
         asyncio.run(send_report(app))
 
+    # 8:30 PM IST
     scheduler.add_job(scheduled_job, trigger='cron', hour=15, minute=0)
     scheduler.start()
 
     print("✅ BOT RUNNING ✅")
 
-    # ✅ FINAL FIX FOR PYTHON 3.14
-    asyncio.run(app.run_polling())
+    # ✅ PYTHON 3.14 FIX (REAL FINAL)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    loop.run_until_complete(app.initialize())
+    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
+    loop.run_until_complete(app.start())
+    loop.run_until_complete(app.start_polling())
+
+    loop.run_forever()
 
 
 if __name__ == "__main__":
