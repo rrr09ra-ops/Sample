@@ -13,7 +13,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 TOKEN = "8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec"
 
 # ✅ REPLACE WITH YOUR GROUP ID
-GROUP_ID = -5314646004
+GROUP_ID = -4432548929
 
 print("✅ Bot starting...")
 
