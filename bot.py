@@ -250,7 +250,7 @@ def main():
 
     # ✅ Schedules
     scheduler.add_job(run_async, args=[send_low_performance_alert], trigger='cron', hour=12, minute=30)
-    scheduler.add_job(run_async, args=[send_private_alerts], trigger='cron', hour=13, minute=0)
+    scheduler.add_job(run_async, args=[send_private_alerts], trigger='cron', hour=13, minute=30)
     scheduler.add_job(run_async, args=[send_report], trigger='cron', hour=15, minute=0)
 
     scheduler.start()
