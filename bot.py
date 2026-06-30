@@ -40,28 +40,22 @@ def run_server():
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users (
+cursor.execute("""CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
     username TEXT,
     name TEXT
-)
-""")
+)""")
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS logs (
+cursor.execute("""CREATE TABLE IF NOT EXISTS logs (
     user_id INTEGER,
     date TEXT,
     count INTEGER
-)
-""")
+)""")
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS streaks (
+cursor.execute("""CREATE TABLE IF NOT EXISTS streaks (
     user_id INTEGER,
     date TEXT
-)
-""")
+)""")
 
 conn.commit()
 
@@ -73,6 +67,7 @@ def get_today():
 # ================= USER =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+
     cursor.execute(
         "INSERT OR IGNORE INTO users VALUES (?, ?, ?)",
         (user.id, user.username, user.first_name)
@@ -123,17 +118,17 @@ def get_streak(uid):
 # ================= TREND =================
 def get_trend(uid):
     today = get_today()
-    yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+    y = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
 
     cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, today))
     t = cursor.fetchone()
     t = t[0] if t else 0
 
-    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, yesterday))
-    y = cursor.fetchone()
-    y = y[0] if y else 0
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, y))
+    yv = cursor.fetchone()
+    yv = yv[0] if yv else 0
 
-    return "📈" if t > y else "📉" if t < y else "➖"
+    return "📈" if t > yv else "📉" if t < yv else "➖"
 
 
 # ================= GRAPH =================
@@ -142,6 +137,7 @@ async def send_graph(app):
 
     for i in range(6, -1, -1):
         d = (datetime.now(UTC) - timedelta(days=i)).strftime("%Y-%m-%d")
+
         cursor.execute("SELECT SUM(count) FROM logs WHERE date=?", (d,))
         val = cursor.fetchone()[0] or 0
 
@@ -178,9 +174,8 @@ async def send_report(app):
         streak = get_streak(uid)
         trend = get_trend(uid)
 
-        display = f"@{username}" if username else name
-        ranked.append((display, count, streak, trend))
-
+        name_display = f"@{username}" if username else name
+        ranked.append((name_display, count, streak, trend))
         total += count
 
     ranked.sort(key=lambda x: x[1], reverse=True)
@@ -207,33 +202,35 @@ def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # ✅ Handlers
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CommandHandler("report", report_cmd))
 
+    # ✅ Scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def schedule():
+    def scheduled_job():
         asyncio.run(send_report(app))
 
-    scheduler.add_job(schedule, trigger='cron', hour=15, minute=0)
+    scheduler.add_job(scheduled_job, trigger='cron', hour=15, minute=0)
     scheduler.start()
 
     print("✅ BOT RUNNING ✅")
 
-    # ✅ FINAL WORKING LOOP (NO ERRORS)
+    # ✅ FINAL WORKING EVENT LOOP
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    async def start():
+    async def runner():
         await app.initialize()
         await app.bot.delete_webhook(drop_pending_updates=True)
         await app.start()
 
-        while True:
-            await asyncio.sleep(1)
+        # ✅ ACTUAL POLLING LOOP (CRITICAL FIX)
+        await app.updater.start_polling()
 
-    loop.run_until_complete(start())
+    loop.run_until_complete(runner())
     loop.run_forever()
 
 
