@@ -64,15 +64,12 @@ conn.commit()
 def get_today():
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
-def get_month():
-    return datetime.now(UTC).strftime("%Y-%m")
-
 # ================= PHOTO =================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today = get_today()
 
-    # Save user
+    # save user
     cursor.execute("SELECT 1 FROM users WHERE user_id=?", (user.id,))
     if not cursor.fetchone():
         cursor.execute(
@@ -80,7 +77,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (user.id, user.username, user.first_name)
         )
 
-    # Update count
+    # update count
     cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (user.id, today))
     row = cursor.fetchone()
 
@@ -95,7 +92,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (user.id, user.username, user.first_name, today, 1)
         )
 
-    # Store streak
+    # update streak log
     cursor.execute("INSERT INTO streaks VALUES (?, ?)", (user.id, today))
 
     conn.commit()
@@ -121,6 +118,76 @@ def calculate_streak(user_id):
     return streak
 
 # ================= MISSED =================
+async def missed_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    today_dt = datetime.now(UTC)
+    today = get_today()
+
+    cursor.execute("SELECT user_id, username, name FROM users")
+    users = cursor.fetchall()
+
+    cursor.execute("SELECT user_id FROM logs WHERE date=?", (today,))
+    sent_users = {u[0] for u in cursor.fetchall()}
+
+    missed_list = []
+
+    for user_id, username, name in users:
+        if user_id not in sent_users:
+            missing_days = 0
+
+            for i in range(0, 5):
+                check_day = (today_dt - timedelta(days=i)).strftime("%Y-%m-%d")
+
+                cursor.execute(
+                    "SELECT 1 FROM logs WHERE user_id=? AND date=?",
+                    (user_id, check_day)
+                )
+
+                if not cursor.fetchone():
+                    missing_days += 1
+                else:
+                    break
+
+            display = f"@{username}" if username else name
+
+            if missing_days >= 2:
+                missed_list.append(f"🚨 {display} — 0 (missed {missing_days} days)")
+            else:
+                missed_list.append(f"⚠️ {display} — 0")
+
+    if not missed_list:
+        await update.message.reply_text("✅ No one missed today!")
+        return
+
+    text = "⚠️ Missed Users:\n\n" + "\n".join(missed_list)
+
+    await update.message.reply_text(text)
+
+# ================= MISSED YESTERDAY =================
+async def missed_yesterday_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    cursor.execute("SELECT user_id, username, name FROM users")
+    users = cursor.fetchall()
+
+    cursor.execute("SELECT user_id FROM logs WHERE date=?", (yesterday,))
+    sent_users = {u[0] for u in cursor.fetchall()}
+
+    missed = []
+
+    for user_id, username, name in users:
+        if user_id not in sent_users:
+            display = f"@{username}" if username else name
+            missed.append(f"{display} — 0")
+
+    if not missed:
+        await update.message.reply_text("✅ No one missed yesterday!")
+        return
+
+    text = f"📅 Missed Yesterday ({yesterday}):\n\n" + "\n".join(missed)
+
+    await update.message.reply_text(text)
+
+# ================= AUTO MISSED =================
 async def send_missed_alert(app):
     today = get_today()
 
@@ -135,54 +202,14 @@ async def send_missed_alert(app):
     for user_id, username, name in users:
         if user_id not in sent_users:
             display = f"@{username}" if username else name
-            missed.append(display)
+            missed.append(f"{display} — 0")
 
     if not missed:
         return
 
-    text = "⚠️ Missed Users:\n\n"
-    for user in missed:
-        text += f"{user} — 0\n"
+    text = "⚠️ Missed Users:\n\n" + "\n".join(missed)
 
     await app.bot.send_message(chat_id=GROUP_ID, text=text)
-
-# ================= WARNING =================
-async def send_warnings(app):
-    today_dt = datetime.now(UTC)
-
-    cursor.execute("SELECT user_id, username, name FROM users")
-    users = cursor.fetchall()
-
-    text = "⚠️ Warning Users:\n\n"
-    found = False
-
-    for user_id, username, name in users:
-        missing_days = 0
-
-        for i in range(1, 5):
-            check_day = (today_dt - timedelta(days=i)).strftime("%Y-%m-%d")
-
-            cursor.execute(
-                "SELECT 1 FROM logs WHERE user_id=? AND date=?",
-                (user_id, check_day)
-            )
-
-            if not cursor.fetchone():
-                missing_days += 1
-            else:
-                break
-
-        if missing_days >= 2:
-            display = f"@{username}" if username else name
-            text += f"🚨 {display} — missed {missing_days} days\n"
-            found = True
-        elif missing_days == 1:
-            display = f"@{username}" if username else name
-            text += f"⚠️ {display} — missed 1 day\n"
-            found = True
-
-    if found:
-        await app.bot.send_message(chat_id=GROUP_ID, text=text)
 
 # ================= REPORT =================
 async def send_report(app):
@@ -191,28 +218,23 @@ async def send_report(app):
     cursor.execute("SELECT user_id, username, name FROM users")
     users = cursor.fetchall()
 
-    cursor.execute(
-        "SELECT user_id, count FROM logs WHERE date=?",
-        (today,)
-    )
-    data = cursor.fetchall()
-
-    data_dict = {user_id: count for user_id, count in data}
-
-    report = f"📊 Daily Report ({today})\n\n🏆 Leaderboard:\n\n"
-    total = 0
+    cursor.execute("SELECT user_id, count FROM logs WHERE date=?", (today,))
+    data_dict = dict(cursor.fetchall())
 
     ranked = []
+    total = 0
 
-    for user_id, username, name in users:
-        count = data_dict.get(user_id, 0)
+    for uid, username, name in users:
+        count = data_dict.get(uid, 0)
+        streak = calculate_streak(uid)
         display = f"@{username}" if username else name
-        streak = calculate_streak(user_id)
 
         ranked.append((display, count, streak))
         total += count
 
     ranked.sort(key=lambda x: x[1], reverse=True)
+
+    report = f"📊 Daily Report ({today})\n\n🏆 Leaderboard:\n\n"
 
     for i, (display, count, streak) in enumerate(ranked, 1):
         report += f"{i}. {display} — {count} (🔥 {streak}d)\n"
@@ -220,33 +242,6 @@ async def send_report(app):
     report += f"\n📸 Total Today: {total}"
 
     await app.bot.send_message(chat_id=GROUP_ID, text=report)
-
-# ================= RESET =================
-async def reset_month(app):
-    cursor.execute("DELETE FROM logs")
-    cursor.execute("DELETE FROM streaks")
-    conn.commit()
-
-# ================= COMMANDS =================
-async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_report(context.application)
-
-async def missed_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_missed_alert(context.application)
-
-async def today_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_report(context.application)
-
-async def reset_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ Not allowed.")
-        return
-
-    cursor.execute("DELETE FROM logs")
-    cursor.execute("DELETE FROM streaks")
-    conn.commit()
-
-    await update.message.reply_text("✅ Data reset done.")
 
 # ================= MAIN =================
 def main():
@@ -258,10 +253,9 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(CommandHandler("report", report_cmd))
     app.add_handler(CommandHandler("missed", missed_cmd))
-    app.add_handler(CommandHandler("today", today_cmd))
-    app.add_handler(CommandHandler("reset", reset_cmd))
+    app.add_handler(CommandHandler("missed_yesterday", missed_yesterday_cmd))
+    app.add_handler(CommandHandler("report", lambda u, c: send_report(c.application)))
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
@@ -271,27 +265,16 @@ def main():
     # ✅ 2 PM IST
     scheduler.add_job(run_async, args=[send_missed_alert], trigger='cron', hour=8, minute=30)
 
-    # ✅ 4 PM IST
-    scheduler.add_job(run_async, args=[send_warnings], trigger='cron', hour=10, minute=30)
-
     # ✅ 8:30 PM IST
     scheduler.add_job(run_async, args=[send_report], trigger='cron', hour=15, minute=0)
-
-    # ✅ monthly reset
-    scheduler.add_job(run_async, args=[reset_month], trigger='cron', day=1, hour=0, minute=5)
 
     scheduler.start()
 
     loop.run_until_complete(app.initialize())
-    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
 
-    loop.run_until_complete(
-        app.bot.send_message(chat_id=GROUP_ID, text="✅ Bot started 🚀")
-    )
-
-    print("✅ FINAL BOT RUNNING")
+    print("✅ CLEAN FINAL BOT RUNNING")
 
     loop.run_forever()
 
