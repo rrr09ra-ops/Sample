@@ -1,5 +1,6 @@
 import sqlite3
 import threading
+import asyncio
 from datetime import datetime, timedelta, UTC
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -91,11 +92,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row = cursor.fetchone()
 
     if row:
-        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?", (user.id, today))
+        cursor.execute(
+            "UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
+            (user.id, today)
+        )
     else:
-        cursor.execute("INSERT INTO logs VALUES (?, ?, ?)", (user.id, today, 1))
+        cursor.execute(
+            "INSERT INTO logs VALUES (?, ?, ?)",
+            (user.id, today, 1)
+        )
 
-    cursor.execute("SELECT 1 FROM streaks WHERE user_id=? AND date=?", (user.id, today))
+    cursor.execute(
+        "SELECT 1 FROM streaks WHERE user_id=? AND date=?",
+        (user.id, today)
+    )
     if not cursor.fetchone():
         cursor.execute("INSERT INTO streaks VALUES (?, ?)", (user.id, today))
 
@@ -105,7 +115,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= STREAK =================
 def get_streak(uid):
     cursor.execute("SELECT date FROM streaks WHERE user_id=?", (uid,))
-    dates = set([d[0] for d in cursor.fetchall()])
+    dates = set(d[0] for d in cursor.fetchall())
 
     streak = 0
     today = datetime.now(UTC)
@@ -123,17 +133,17 @@ def get_streak(uid):
 # ================= TREND =================
 def get_trend(uid):
     today = get_today()
-    y = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
 
     cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, today))
     t = cursor.fetchone()
     t = t[0] if t else 0
 
-    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, y))
-    yv = cursor.fetchone()
-    yv = yv[0] if yv else 0
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, yesterday))
+    y = cursor.fetchone()
+    y = y[0] if y else 0
 
-    return "📈" if t > yv else "📉" if t < yv else "➖"
+    return "📈" if t > y else "📉" if t < y else "➖"
 
 
 # ================= GRAPH =================
@@ -142,6 +152,7 @@ async def send_graph(app):
 
     for i in range(6, -1, -1):
         d = (datetime.now(UTC) - timedelta(days=i)).strftime("%Y-%m-%d")
+
         cursor.execute("SELECT SUM(count) FROM logs WHERE date=?", (d,))
         val = cursor.fetchone()[0] or 0
 
@@ -179,8 +190,8 @@ async def send_report(app):
         trend = get_trend(uid)
 
         display = f"@{username}" if username else name
-
         ranked.append((display, count, streak, trend))
+
         total += count
 
     ranked.sort(key=lambda x: x[1], reverse=True)
@@ -213,19 +224,16 @@ def main():
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def schedule_report():
-        import asyncio
+    def scheduled_job():
         asyncio.run(send_report(app))
 
-    # ✅ 8:30 PM IST
-    scheduler.add_job(schedule_report, trigger='cron', hour=15, minute=0)
-
+    scheduler.add_job(scheduled_job, trigger='cron', hour=15, minute=0)
     scheduler.start()
 
     print("✅ BOT RUNNING ✅")
 
-    # ✅ FINAL FIX
-    app.run_polling()
+    # ✅ FINAL FIX FOR PYTHON 3.14
+    asyncio.run(app.run_polling())
 
 
 if __name__ == "__main__":
