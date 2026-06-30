@@ -32,7 +32,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot running")
 
-
 def run_server():
     HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
 
@@ -71,10 +70,9 @@ def get_today():
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
-# ================= USER TRACK =================
+# ================= USER =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-
     cursor.execute(
         "INSERT OR IGNORE INTO users VALUES (?, ?, ?)",
         (user.id, user.username, user.first_name)
@@ -93,20 +91,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row = cursor.fetchone()
 
     if row:
-        cursor.execute(
-            "UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
-            (user.id, today)
-        )
+        cursor.execute("UPDATE logs SET count = count + 1 WHERE user_id=? AND date=?", (user.id, today))
     else:
-        cursor.execute(
-            "INSERT INTO logs VALUES (?, ?, ?)",
-            (user.id, today, 1)
-        )
+        cursor.execute("INSERT INTO logs VALUES (?, ?, ?)", (user.id, today, 1))
 
-    cursor.execute(
-        "SELECT 1 FROM streaks WHERE user_id=? AND date=?",
-        (user.id, today)
-    )
+    cursor.execute("SELECT 1 FROM streaks WHERE user_id=? AND date=?", (user.id, today))
     if not cursor.fetchone():
         cursor.execute("INSERT INTO streaks VALUES (?, ?)", (user.id, today))
 
@@ -144,12 +133,7 @@ def get_trend(uid):
     y = cursor.fetchone()
     y = y[0] if y else 0
 
-    if t > y:
-        return "📈"
-    elif t < y:
-        return "📉"
-    else:
-        return "➖"
+    return "📈" if t > y else "📉" if t < y else "➖"
 
 
 # ================= GRAPH =================
@@ -158,7 +142,6 @@ async def send_graph(app):
 
     for i in range(6, -1, -1):
         d = (datetime.now(UTC) - timedelta(days=i)).strftime("%Y-%m-%d")
-
         cursor.execute("SELECT SUM(count) FROM logs WHERE date=?", (d,))
         val = cursor.fetchone()[0] or 0
 
@@ -197,6 +180,7 @@ async def send_report(app):
 
         display = f"@{username}" if username else name
         ranked.append((display, count, streak, trend))
+
         total += count
 
     ranked.sort(key=lambda x: x[1], reverse=True)
@@ -223,32 +207,33 @@ def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # ✅ handlers
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CommandHandler("report", report_cmd))
 
-    # ✅ scheduler
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def scheduled_job():
+    def schedule():
         asyncio.run(send_report(app))
 
-    # 8:30 PM IST
-    scheduler.add_job(scheduled_job, trigger='cron', hour=15, minute=0)
+    scheduler.add_job(schedule, trigger='cron', hour=15, minute=0)
     scheduler.start()
 
     print("✅ BOT RUNNING ✅")
 
-    # ✅ PYTHON 3.14 FIX (REAL FINAL)
+    # ✅ FINAL WORKING LOOP (NO ERRORS)
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
-    loop.run_until_complete(app.initialize())
-    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
-    loop.run_until_complete(app.start())
-    loop.run_until_complete(app.start_polling())
+    async def start():
+        await app.initialize()
+        await app.bot.delete_webhook(drop_pending_updates=True)
+        await app.start()
 
+        while True:
+            await asyncio.sleep(1)
+
+    loop.run_until_complete(start())
     loop.run_forever()
 
 
