@@ -14,13 +14,15 @@ from telegram.ext import (
 )
 
 from apscheduler.schedulers.background import BackgroundScheduler
+
 import matplotlib
-matplotlib.use("Agg")  # ✅ required for server
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # ✅ CONFIG
 TOKEN = "8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec"
 GROUP_ID = -1004432548929
+
 
 # ================= SERVER =================
 class Handler(BaseHTTPRequestHandler):
@@ -31,6 +33,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_server():
     HTTPServer(("0.0.0.0", 10000), Handler).serve_forever()
+
 
 # ================= DATABASE =================
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -61,17 +64,21 @@ CREATE TABLE IF NOT EXISTS streaks (
 
 conn.commit()
 
+
 def get_today():
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
-# ================= USER =================
+
+# ================= USER TRACK =================
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+
     cursor.execute(
         "INSERT OR IGNORE INTO users VALUES (?, ?, ?)",
         (user.id, user.username, user.first_name)
     )
     conn.commit()
+
 
 # ================= PHOTO =================
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -84,21 +91,31 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row = cursor.fetchone()
 
     if row:
-        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?", (user.id, today))
+        cursor.execute(
+            "UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
+            (user.id, today)
+        )
     else:
-        cursor.execute("INSERT INTO logs VALUES (?, ?, ?)", (user.id, today, 1))
+        cursor.execute(
+            "INSERT INTO logs VALUES (?, ?, ?)",
+            (user.id, today, 1)
+        )
 
-    # streak safe insert
-    cursor.execute("SELECT 1 FROM streaks WHERE user_id=? AND date=?", (user.id, today))
+    # ✅ streak safe insert
+    cursor.execute(
+        "SELECT 1 FROM streaks WHERE user_id=? AND date=?",
+        (user.id, today)
+    )
     if not cursor.fetchone():
         cursor.execute("INSERT INTO streaks VALUES (?, ?)", (user.id, today))
 
     conn.commit()
 
+
 # ================= STREAK =================
 def get_streak(user_id):
     cursor.execute("SELECT date FROM streaks WHERE user_id=?", (user_id,))
-    dates = set(row[0] for row in cursor.fetchall())
+    dates = set([d[0] for d in cursor.fetchall()])
 
     streak = 0
     today = datetime.now(UTC)
@@ -111,6 +128,7 @@ def get_streak(user_id):
             break
 
     return streak
+
 
 # ================= TREND =================
 def get_trend(user_id):
@@ -125,14 +143,22 @@ def get_trend(user_id):
     y = cursor.fetchone()
     y = y[0] if y else 0
 
-    return "📈" if t > y else "📉" if t < y else "➖"
+    if t > y:
+        return "📈"
+    elif t < y:
+        return "📉"
+    else:
+        return "➖"
+
 
 # ================= GRAPH =================
 async def send_graph(app):
-    days, values = [], []
+    days = []
+    values = []
 
     for i in range(6, -1, -1):
         d = (datetime.now(UTC) - timedelta(days=i)).strftime("%Y-%m-%d")
+
         cursor.execute("SELECT SUM(count) FROM logs WHERE date=?", (d,))
         val = cursor.fetchone()[0] or 0
 
@@ -151,44 +177,6 @@ async def send_graph(app):
     with open(path, "rb") as img:
         await app.bot.send_photo(GROUP_ID, img)
 
-# ================= LOW ALERT =================
-async def low_alert(app):
-    today = get_today()
-
-    cursor.execute("SELECT user_id FROM users")
-    users = [u[0] for u in cursor.fetchall()]
-
-    cursor.execute("SELECT user_id, count FROM logs WHERE date=?", (today,))
-    data = dict(cursor.fetchall())
-
-    msg = []
-
-    for uid in users:
-        count = data.get(uid, 0)
-        if count == 0:
-            msg.append(f"🚨 ID:{uid} — 0")
-        elif count == 1:
-            msg.append(f"⚠️ ID:{uid} — 1")
-
-    if msg:
-        await app.bot.send_message(GROUP_ID, "⚠️ Low Performance\n\n" + "\n".join(msg))
-
-# ================= PRIVATE ALERT =================
-async def private_alert(app):
-    today = get_today()
-
-    cursor.execute("SELECT user_id FROM users")
-    users = [u[0] for u in cursor.fetchall()]
-
-    cursor.execute("SELECT user_id, count FROM logs WHERE date=?", (today,))
-    data = dict(cursor.fetchall())
-
-    for uid in users:
-        if data.get(uid, 0) <= 1:
-            try:
-                await app.bot.send_message(uid, "⚠️ Improve your performance today!")
-            except:
-                pass
 
 # ================= REPORT =================
 async def send_report(app):
@@ -226,6 +214,12 @@ async def send_report(app):
 
     await send_graph(app)
 
+
+# ================= MANUAL COMMAND =================
+async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_report(context.application)
+
+
 # ================= MAIN =================
 def main():
     threading.Thread(target=run_server, daemon=True).start()
@@ -238,28 +232,30 @@ def main():
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
+    # ✅ IMPORTANT: manual testing command
+    app.add_handler(CommandHandler("report", report_cmd))
+
     scheduler = BackgroundScheduler(timezone="UTC")
 
     def run_async(func):
         asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    # ✅ schedules (IST converted to UTC)
-    scheduler.add_job(run_async, args=[low_alert], trigger='cron', hour=12, minute=30)
-    scheduler.add_job(run_async, args=[private_alert], trigger='cron', hour=13, minute=0)
+    # ✅ REPORT 8:30 PM IST
     scheduler.add_job(run_async, args=[send_report], trigger='cron', hour=15, minute=0)
 
     scheduler.start()
 
     loop.run_until_complete(app.initialize())
 
-    # ✅ FINAL CRITICAL FIX
+    # ✅ CRITICAL FIX
     loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
 
     loop.run_until_complete(app.start())
 
-    print("✅ BOT RUNNING PERFECTLY (NO CONFLICT ✅)")
+    print("✅ BOT RUNNING")
 
     loop.run_forever()
+
 
 if __name__ == "__main__":
     main()
