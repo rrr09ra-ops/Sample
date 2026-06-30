@@ -1,6 +1,5 @@
 import sqlite3
 import threading
-import asyncio
 from datetime import datetime, timedelta, UTC
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -19,9 +18,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+
 # ✅ CONFIG
 TOKEN = "8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec"
 GROUP_ID = -1004432548929
+
 
 # ================= SERVER =================
 class Handler(BaseHTTPRequestHandler):
@@ -64,7 +65,6 @@ CREATE TABLE IF NOT EXISTS streaks (
 conn.commit()
 
 
-# ================= HELPERS =================
 def get_today():
     return datetime.now(UTC).strftime("%Y-%m-%d")
 
@@ -91,20 +91,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row = cursor.fetchone()
 
     if row:
-        cursor.execute(
-            "UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
-            (user.id, today)
-        )
+        cursor.execute("UPDATE logs SET count=count+1 WHERE user_id=? AND date=?", (user.id, today))
     else:
-        cursor.execute(
-            "INSERT INTO logs VALUES (?, ?, ?)",
-            (user.id, today, 1)
-        )
+        cursor.execute("INSERT INTO logs VALUES (?, ?, ?)", (user.id, today, 1))
 
-    cursor.execute(
-        "SELECT 1 FROM streaks WHERE user_id=? AND date=?",
-        (user.id, today)
-    )
+    cursor.execute("SELECT 1 FROM streaks WHERE user_id=? AND date=?", (user.id, today))
     if not cursor.fetchone():
         cursor.execute("INSERT INTO streaks VALUES (?, ?)", (user.id, today))
 
@@ -112,8 +103,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ================= STREAK =================
-def get_streak(user_id):
-    cursor.execute("SELECT date FROM streaks WHERE user_id=?", (user_id,))
+def get_streak(uid):
+    cursor.execute("SELECT date FROM streaks WHERE user_id=?", (uid,))
     dates = set([d[0] for d in cursor.fetchall()])
 
     streak = 0
@@ -130,34 +121,27 @@ def get_streak(user_id):
 
 
 # ================= TREND =================
-def get_trend(user_id):
+def get_trend(uid):
     today = get_today()
-    yesterday = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
+    y = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (user_id, today))
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, today))
     t = cursor.fetchone()
     t = t[0] if t else 0
 
-    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (user_id, yesterday))
-    y = cursor.fetchone()
-    y = y[0] if y else 0
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (uid, y))
+    yv = cursor.fetchone()
+    yv = yv[0] if yv else 0
 
-    if t > y:
-        return "📈"
-    elif t < y:
-        return "📉"
-    else:
-        return "➖"
+    return "📈" if t > yv else "📉" if t < yv else "➖"
 
 
 # ================= GRAPH =================
 async def send_graph(app):
-    days = []
-    values = []
+    days, values = [], []
 
     for i in range(6, -1, -1):
         d = (datetime.now(UTC) - timedelta(days=i)).strftime("%Y-%m-%d")
-
         cursor.execute("SELECT SUM(count) FROM logs WHERE date=?", (d,))
         val = cursor.fetchone()[0] or 0
 
@@ -195,6 +179,7 @@ async def send_report(app):
         trend = get_trend(uid)
 
         display = f"@{username}" if username else name
+
         ranked.append((display, count, streak, trend))
         total += count
 
@@ -208,7 +193,6 @@ async def send_report(app):
     text += f"\n📸 Total: {total}"
 
     await app.bot.send_message(GROUP_ID, text)
-
     await send_graph(app)
 
 
@@ -221,41 +205,27 @@ async def report_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     threading.Thread(target=run_server, daemon=True).start()
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    global app
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # ✅ handlers
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CommandHandler("report", report_cmd))
 
     scheduler = BackgroundScheduler(timezone="UTC")
 
-    def run_async(func):
-        asyncio.run_coroutine_threadsafe(func(app), loop)
+    def schedule_report():
+        import asyncio
+        asyncio.run(send_report(app))
 
-    # ✅ 8:30 PM IST (15:00 UTC)
-    scheduler.add_job(run_async, args=[send_report], trigger='cron', hour=15, minute=0)
+    # ✅ 8:30 PM IST
+    scheduler.add_job(schedule_report, trigger='cron', hour=15, minute=0)
 
     scheduler.start()
 
-    async def start_bot():
-        await app.initialize()
+    print("✅ BOT RUNNING ✅")
 
-        # ✅ FIX CONFLICT
-        await app.bot.delete_webhook(drop_pending_updates=True)
-
-        # ✅ START POLLING CORRECTLY
-        await app.start()
-        await app.start_polling()
-
-        print("✅ BOT RUNNING & LISTENING")
-
-    loop.run_until_complete(start_bot())
-    loop.run_forever()
+    # ✅ FINAL FIX
+    app.run_polling()
 
 
 if __name__ == "__main__":
