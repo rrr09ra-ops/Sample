@@ -9,7 +9,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from apscheduler.schedulers.background import BackgroundScheduler
 
-TOKEN = os.environ.get("TOKEN")
+TOKEN = 8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec
 GROUP_ID = -5314646004  # Replace this
 
 print("✅ Bot starting...")
