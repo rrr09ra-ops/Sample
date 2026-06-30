@@ -15,11 +15,11 @@ from telegram.ext import (
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# ✅ PUT YOUR TOKEN HERE (WITH QUOTES)
+# ✅ YOUR TOKEN (WITH QUOTES)
 TOKEN = "8438035827:AAGfxMLEEHZ42kDGRnGI-Tp4UTNZLJWtNec"
 
-# ❌ TEMP — this will be replaced after getting correct ID
-GROUP_ID = 0
+# ✅ YOUR GROUP ID (-100....)
+GROUP_ID = -1004432548929
 
 print("✅ Bot starting...")
 
@@ -57,31 +57,61 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today = get_today()
 
-    print("✅ PHOTO RECEIVED FROM:", user.id)
+    cursor.execute("SELECT count FROM logs WHERE user_id=? AND date=?", (user.id, today))
+    row = cursor.fetchone()
 
-# ================= GET CHAT ID =================
-async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("✅ CHAT ID:", update.effective_chat.id)
+    if row:
+        cursor.execute(
+            "UPDATE logs SET count=count+1 WHERE user_id=? AND date=?",
+            (user.id, today)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO logs VALUES (?, ?, ?, ?, ?)",
+            (user.id, user.username, user.first_name, today, 1)
+        )
+
+    conn.commit()
 
 # ================= REMINDER =================
 async def send_reminder(app):
     print("🔥 REMINDER TRIGGERED")
 
-    if GROUP_ID != 0:
-        await app.bot.send_message(
-            chat_id=GROUP_ID,
-            text="⏰ Reminder: Please send your photo!"
-        )
+    await app.bot.send_message(
+        chat_id=GROUP_ID,
+        text="⏰ Reminder: Please send your photo!"
+    )
 
 # ================= REPORT =================
 async def send_report(app):
     print("🔥 REPORT TRIGGERED")
 
-    if GROUP_ID != 0:
+    today = get_today()
+
+    cursor.execute(
+        "SELECT user_id, username, name, count FROM logs WHERE date=?",
+        (today,)
+    )
+    data = cursor.fetchall()
+
+    if not data:
         await app.bot.send_message(
             chat_id=GROUP_ID,
-            text="📊 Report test working!"
+            text="📊 No images shared today."
         )
+        return
+
+    report = f"📊 Daily Report ({today})\n\n"
+    total = 0
+
+    for user_id, username, name, count in data:
+        display = f"@{username}" if username else name
+        report += f"• {display} — {count}\n"
+        total += count
+
+    report += f"\n📸 Total Images: {total}"
+
+    await app.bot.send_message(chat_id=GROUP_ID, text=report)
 
 # ================= MAIN =================
 def main():
@@ -91,9 +121,6 @@ def main():
     asyncio.set_event_loop(loop)
 
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # ✅ HANDLERS
-    app.add_handler(MessageHandler(filters.ALL, get_chat_id))  # get chat id
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     print("✅ Bot running")
@@ -103,22 +130,25 @@ def main():
     def run_async(func):
         asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    # ✅ TEST SCHEDULE
+    # ✅ TEST MODE (FAST)
     scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
     scheduler.add_job(run_async, args=[send_report], trigger='interval', minutes=2)
 
     scheduler.start()
 
+    # ✅ START BOT
     loop.run_until_complete(app.initialize())
     loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
 
-    print("✅ Send any message in group to get CHAT ID")
+    # ✅ START MESSAGE
+    loop.run_until_complete(
+        app.bot.send_message(chat_id=GROUP_ID, text="✅ Bot started successfully 🚀")
+    )
 
     loop.run_forever()
 
-# ================= START =================
+# ================= RUN =================
 if __name__ == "__main__":
     main()
-``
