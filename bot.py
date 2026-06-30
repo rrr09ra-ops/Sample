@@ -97,6 +97,13 @@ async def send_report(app):
     cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
     users = cursor.fetchall()
 
+    if not users:
+        await app.bot.send_message(
+            chat_id=GROUP_ID,
+            text="📊 No data available today."
+        )
+        return
+
     cursor.execute("SELECT user_id, username, name, count FROM logs WHERE date=?", (today,))
     data = cursor.fetchall()
 
@@ -107,7 +114,7 @@ async def send_report(app):
     total = 0
 
     for user_id, username, name in users:
-        display = format_user(name, username)
+        display = f"@{username}" if username else name
 
         if user_id in data_dict:
             count = data_dict[user_id][3]
