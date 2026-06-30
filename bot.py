@@ -94,37 +94,24 @@ async def send_report(app):
 
     today = get_today()
 
-    cursor.execute("SELECT DISTINCT user_id, username, name FROM logs")
-    users = cursor.fetchall()
-
-    if not users:
-        await app.bot.send_message(
-            chat_id=GROUP_ID,
-            text="📊 No data available today."
-        )
-        return
-
     cursor.execute("SELECT user_id, username, name, count FROM logs WHERE date=?", (today,))
     data = cursor.fetchall()
 
-    data_dict = {u[0]: u for u in data}
+    if not data:
+        await app.bot.send_message(
+            chat_id=GROUP_ID,
+            text="📊 No images shared today."
+        )
+        return
 
-    shared = "✅ Shared:\n"
-    missed = "❌ Missed:\n"
+    report = "📊 Daily Report\n\n"
     total = 0
 
-    for user_id, username, name in users:
-        display = f"@{username}" if username else name
+    for user_id, username, name, count in data:
+        name_display = f"@{username}" if username else name
+        report += f"• {name_display} — {count}\n"
+        total += count
 
-        if user_id in data_dict:
-            count = data_dict[user_id][3]
-            shared += f"• {display} — {count}\n"
-            total += count
-        else:
-            missed += f"• {display}\n"
-
-    report = f"📊 Daily Report ({today})\n\n"
-    report += shared + "\n" + missed
     report += f"\n📸 Total Images: {total}"
 
     await app.bot.send_message(chat_id=GROUP_ID, text=report)
