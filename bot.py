@@ -141,13 +141,18 @@ def main():
 
     print("✅ Bot running")
 
-    scheduler = BackgroundScheduler(timezone="UTC")
+   scheduler = BackgroundScheduler(timezone="UTC")
 
-    def run_async(func):
-        asyncio.run_coroutine_threadsafe(func(app), loop)
+def run_async(func):
+    asyncio.run_coroutine_threadsafe(func(app), loop)
 
-    scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
-    scheduler.start()
+# ✅ Reminder test
+scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
+
+# ✅ ADD THIS FOR REPORT (YOU MISSED)
+scheduler.add_job(run_async, args=[send_report], trigger='interval', minutes=2)
+
+scheduler.start()
 
     # ✅ START SEQUENCE (VERY IMPORTANT ORDER)
     loop.run_until_complete(app.initialize())
