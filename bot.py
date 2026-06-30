@@ -131,40 +131,40 @@ async def send_report(app):
 
 # ================= MAIN =================
 def main():
+    # Start server
     threading.Thread(target=run_server, daemon=True).start()
 
+    # Event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    # Bot setup
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     print("✅ Bot running")
 
-   scheduler = BackgroundScheduler(timezone="UTC")
+    # Scheduler
+    scheduler = BackgroundScheduler(timezone="UTC")
 
-def run_async(func):
-    asyncio.run_coroutine_threadsafe(func(app), loop)
+    def run_async(func):
+        asyncio.run_coroutine_threadsafe(func(app), loop)
 
-# ✅ Reminder test
-scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
+    # ✅ Reminder test
+    scheduler.add_job(run_async, args=[send_reminder], trigger='interval', minutes=1)
 
-# ✅ ADD THIS FOR REPORT (YOU MISSED)
-scheduler.add_job(run_async, args=[send_report], trigger='interval', minutes=2)
+    # ✅ Report test (IMPORTANT)
+    scheduler.add_job(run_async, args=[send_report], trigger='interval', minutes=2)
 
-scheduler.start()
+    scheduler.start()
 
-    # ✅ START SEQUENCE (VERY IMPORTANT ORDER)
+    # ✅ Start bot (correct order)
     loop.run_until_complete(app.initialize())
-
-    # ✅ FIX CONFLICT ERROR (MUST BE HERE)
     loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
-
     loop.run_until_complete(app.start())
     loop.run_until_complete(app.updater.start_polling())
 
     loop.run_forever()
-
 # ================= START =================
 if __name__ == "__main__":
     main()
